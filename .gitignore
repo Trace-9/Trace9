@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+package-lock.json
+yarn.lock
+
+# Build outputs
+dist/
+build/
+target/
+.anchor/
+*.so
+
+# Environment files
+.env
+.env.local
+
+# Logs
+*.log
+npm-debug.log*
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# Solana specific
+test-ledger/
+keypairs/
+*.json
+!package.json
+!tsconfig.json
+!Anchor.toml
+
+# Test coverage
+coverage/
+.nyc_output/
+
+# Temporary files
+*.tmp
+output/
+attached_assets/
+

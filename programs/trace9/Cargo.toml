@@ -1,0 +1,21 @@
+[package]
+name = "trace9"
+version = "1.0.0"
+description = "Trace9 Oracle - Permissionless oracle on Solana"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "trace9"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.30.0"
+anchor-spl = "0.30.0"
+

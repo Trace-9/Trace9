@@ -1,0 +1,29 @@
+{
+  "name": "@trace9/sdk",
+  "version": "1.0.0",
+  "description": "Trace9 Oracle SDK for Solana",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "oracle",
+    "solana",
+    "prediction-markets",
+    "trace9",
+    "anchor"
+  ],
+  "author": "Trace9",
+  "license": "MIT",
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.0",
+    "@solana/web3.js": "^1.87.6"
+  },
+  "devDependencies": {
+    "@types/node": "^20.10.0",
+    "typescript": "^5.3.3"
+  }
+}
+

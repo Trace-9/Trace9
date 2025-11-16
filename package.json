@@ -1,0 +1,37 @@
+{
+  "name": "@trace9/oracle",
+  "version": "1.0.0",
+  "description": "Trace9 Oracle - Permissionless oracle on Solana Mainnet",
+  "main": "index.js",
+  "scripts": {
+    "build": "anchor build",
+    "test": "anchor test",
+    "deploy:devnet": "anchor deploy --provider.cluster devnet",
+    "deploy:mainnet": "anchor deploy --provider.cluster mainnet-beta",
+    "sdk:build": "cd sdk && npm run build",
+    "sdk:install": "cd sdk && npm install"
+  },
+  "keywords": [
+    "oracle",
+    "solana",
+    "prediction-markets",
+    "trace9",
+    "anchor",
+    "sol"
+  ],
+  "author": "Trace9",
+  "license": "MIT",
+  "dependencies": {
+    "@coral-xyz/anchor": "^0.30.0",
+    "@solana/web3.js": "^1.87.6"
+  },
+  "devDependencies": {
+    "@types/bn.js": "^5.1.5",
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "chai": "^4.3.10",
+    "mocha": "^10.2.0",
+    "typescript": "^5.3.3"
+  }
+}
+
