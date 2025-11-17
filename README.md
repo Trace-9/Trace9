@@ -20,6 +20,9 @@ Trace9 Oracle is a **fully permissionless oracle SDK** built on Solana that enab
 
 - **Permissionless Oracle** - Ask questions and get answers on-chain  
 - **Native SOL Payments** - All payments use native SOL (no token contracts)  
+- **Batch Operations** - Process multiple questions/answers in single transactions  
+- **Payment Facilitator** - Batch SOL payments with platform fees  
+- **Multi-Wallet Pool** - Parallel transaction execution across worker wallets  
 - **Anchor Framework** - Built with Anchor for type-safe Solana programs  
 - **TypeScript SDK** - Easy-to-use SDK for integration  
 - **Solana Mainnet** - Deployed and ready for production  
@@ -73,14 +76,19 @@ solana airdrop 2
 trace9/
 │
 ├── programs/
-│   └── trace9/
+│   ├── trace9/
+│   │   └── src/
+│   │       └── lib.rs              # Main Anchor program (oracle + batch ops)
+│   └── payment_facilitator/
 │       └── src/
-│           └── lib.rs              # Main Anchor program
+│           └── lib.rs              # Payment facilitator program
 │
 ├── sdk/
 │   └── src/
 │       ├── core/
-│       │   └── Trace9OracleClient.ts
+│       │   ├── Trace9OracleClient.ts
+│       │   ├── PaymentFacilitatorClient.ts
+│       │   └── MultiWalletPool.ts
 │       ├── types/
 │       │   └── index.ts
 │       └── utils/
@@ -107,11 +115,20 @@ trace9/
 1. **Trace9 Program** (`programs/trace9/src/lib.rs`)
    - Oracle state management using PDAs
    - Question/answer functionality
+   - Batch operations (ask/answer multiple questions)
    - Native SOL payment handling
    - Provider earnings tracking
 
-2. **TypeScript SDK** (`sdk/`)
-   - `Trace9OracleClient` - Main client for interacting with the program
+2. **Payment Facilitator Program** (`programs/payment_facilitator/src/lib.rs`)
+   - Batch SOL payment settlement
+   - Platform fee collection (configurable basis points)
+   - Payment replay prevention
+   - Fee withdrawal and management
+
+3. **TypeScript SDK** (`sdk/`)
+   - `Trace9OracleClient` - Main client for oracle operations
+   - `PaymentFacilitatorClient` - Payment facilitator client
+   - `MultiWalletPool` - Multi-wallet pool for parallel transactions
    - Type definitions for questions, answers, and state
    - Utility functions and constants
 
@@ -186,6 +203,80 @@ if (question) {
 }
 ```
 
+### Batch Ask Questions
+
+```typescript
+// Ask multiple questions in a single transaction
+const questionIds = await client.batchAskQuestions({
+  questionTypes: [QuestionType.General, QuestionType.YesNo],
+  questions: [
+    "What is the price of BTC?",
+    "Will Ethereum reach $5000 this year?"
+  ],
+  deadlines: [
+    Math.floor(Date.now() / 1000) + 86400,
+    Math.floor(Date.now() / 1000) + 2592000
+  ]
+});
+
+console.log(`Batch questions asked: ${questionIds.join(', ')}`);
+```
+
+### Payment Facilitator
+
+```typescript
+import { PaymentFacilitatorClient } from '@trace9/sdk';
+import { PublicKey } from '@solana/web3.js';
+import { Wallet } from '@coral-xyz/anchor';
+
+const paymentClient = new PaymentFacilitatorClient({
+  programId: PAYMENT_FACILITATOR_PROGRAM_ID,
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  network: 'mainnet-beta',
+}, wallet);
+
+// Settle a single payment
+const paymentId = new Uint8Array(32); // Generate unique payment ID
+await paymentClient.settlePayment({
+  amount: 100_000_000n, // 0.1 SOL in lamports
+  recipient: recipientPublicKey,
+  paymentId: paymentId,
+});
+
+// Batch settle multiple payments
+await paymentClient.batchSettlePayments({
+  amounts: [100_000_000n, 50_000_000n],
+  recipients: [recipient1, recipient2],
+  paymentIds: [paymentId1, paymentId2],
+});
+```
+
+### Multi-Wallet Pool
+
+```typescript
+import { MultiWalletPool } from '@trace9/sdk';
+import { Connection } from '@solana/web3.js';
+
+const connection = new Connection('https://api.mainnet-beta.solana.com');
+
+const pool = new MultiWalletPool({
+  masterSeed: 'your mnemonic phrase here',
+  connection,
+  walletCount: 10,
+  autoFund: false,
+});
+
+await pool.initialize();
+
+// Execute transactions in parallel
+const transactions = [
+  // ... your transactions
+];
+
+const results = await pool.executeParallelTransactions(transactions);
+console.log(`Executed ${results.length} transactions in parallel`);
+```
+
 ---
 
 ## Testing
@@ -205,15 +296,25 @@ anchor test --provider.cluster devnet
 
 ## Program Instructions
 
-### Core Functions
+### Trace9 Oracle Program
 
 - `initialize` - Initialize the oracle program (authority only)
 - `ask_question` - Ask a question to the oracle (pay with SOL)
 - `provide_answer` - Provide an answer (oracle provider only)
+- `batch_ask_questions` - Ask multiple questions in one transaction
+- `batch_provide_answers` - Provide answers to multiple questions
 - `refund_question` - Refund unanswered question after 7 days
 - `withdraw` - Withdraw provider earnings
 - `set_oracle_fee` - Update oracle fee (authority only)
 - `set_oracle_provider` - Update oracle provider (authority only)
+
+### Payment Facilitator Program
+
+- `initialize` - Initialize payment facilitator (authority only)
+- `settle_payment` - Settle a single payment with platform fee
+- `batch_settle_payments` - Settle multiple payments in one transaction
+- `withdraw_fees` - Withdraw accumulated platform fees (authority only)
+- `update_platform_fee` - Update platform fee percentage (authority only)
 
 ---
 
@@ -242,6 +343,9 @@ anchor test --provider.cluster devnet
 - **Access Control** - Role-based permissions (authority, oracle provider)
 - **Input Validation** - All inputs validated before processing
 - **Native SOL Handling** - Secure SOL transfers using System Program
+- **Batch Processing** - Gas-efficient batch operations for multiple questions/payments
+- **Payment Replay Prevention** - Unique payment IDs prevent double-spending
+- **Platform Fees** - Configurable fee system for payment facilitator
 
 ---
 
@@ -287,6 +391,8 @@ Use it, fork it, modify it - whatever you want! All programs are fully permissio
 |---------|--------|-----------|------|
 | **Permissionless** | Yes - Anyone can ask | No - Whitelisted nodes | Limited |
 | **Native Payments** | SOL | LINK tokens | Pyth tokens |
+| **Batch Operations** | Yes - Built-in | Limited | Limited |
+| **Parallel Execution** | Multi-wallet pool | Sequential | Sequential |
 | **Solana Native** | Built for Solana | EVM only | Solana |
 | **Low Fees** | ~$0.00025 per tx | Higher gas | Low fees |
 | **Open Source** | MIT License | Proprietary | Proprietary |

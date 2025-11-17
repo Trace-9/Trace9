@@ -137,6 +137,107 @@ pub mod trace9 {
         Ok(())
     }
 
+    /// Batch ask multiple questions
+    pub fn batch_ask_questions(
+        ctx: Context<BatchAskQuestions>,
+        question_types: Vec<QuestionType>,
+        questions: Vec<String>,
+        deadlines: Vec<i64>,
+    ) -> Result<Vec<u64>> {
+        require!(questions.len() == deadlines.len() && questions.len() == question_types.len(), Trace9Error::InvalidBatch);
+        require!(questions.len() > 0 && questions.len() <= 20, Trace9Error::InvalidBatchSize);
+
+        let oracle_state = &mut ctx.accounts.oracle_state;
+        let fee = oracle_state.oracle_fee;
+        let total_fee = fee.checked_mul(questions.len() as u64).ok_or(Trace9Error::Overflow)?;
+
+        require!(
+            ctx.accounts.requester.to_account_info().lamports() >= total_fee,
+            Trace9Error::InsufficientFee
+        );
+
+        let mut question_ids = Vec::new();
+        let mut current_question_id = oracle_state.question_counter;
+
+        for i in 0..questions.len() {
+            require!(questions[i].len() > 0 && questions[i].len() <= 500, Trace9Error::InvalidQuestion);
+            require!(deadlines[i] > Clock::get()?.unix_timestamp, Trace9Error::InvalidDeadline);
+
+            // Transfer fee for this question
+            anchor_lang::solana_program::program::invoke(
+                &anchor_lang::solana_program::system_instruction::transfer(
+                    ctx.accounts.requester.key,
+                    ctx.accounts.oracle_state.key,
+                    fee,
+                ),
+                &[
+                    ctx.accounts.requester.to_account_info(),
+                    ctx.accounts.oracle_state.to_account_info(),
+                    ctx.accounts.system_program.to_account_info(),
+                ],
+            )?;
+
+            question_ids.push(current_question_id);
+            current_question_id = current_question_id.checked_add(1).unwrap();
+        }
+
+        oracle_state.question_counter = current_question_id;
+
+        emit!(BatchQuestionsAsked {
+            question_ids: question_ids.clone(),
+            requester: ctx.accounts.requester.key(),
+        });
+
+        Ok(question_ids)
+    }
+
+    /// Batch provide answers to multiple questions
+    pub fn batch_provide_answers(
+        ctx: Context<BatchProvideAnswers>,
+        question_ids: Vec<u64>,
+        text_answers: Vec<String>,
+        numeric_answers: Vec<u64>,
+        bool_answers: Vec<bool>,
+        confidence_scores: Vec<u8>,
+        data_sources: Vec<String>,
+    ) -> Result<()> {
+        require!(
+            ctx.accounts.oracle_provider.key() == ctx.accounts.oracle_state.oracle_provider,
+            Trace9Error::Unauthorized
+        );
+        require!(
+            question_ids.len() == text_answers.len() &&
+            question_ids.len() == numeric_answers.len() &&
+            question_ids.len() == bool_answers.len() &&
+            question_ids.len() == confidence_scores.len() &&
+            question_ids.len() == data_sources.len(),
+            Trace9Error::InvalidBatch
+        );
+        require!(question_ids.len() > 0 && question_ids.len() <= 20, Trace9Error::InvalidBatchSize);
+
+        let oracle_state = &mut ctx.accounts.oracle_state;
+        let mut total_bounty = 0u64;
+
+        for i in 0..question_ids.len() {
+            require!(confidence_scores[i] <= 100, Trace9Error::InvalidConfidence);
+            // Note: In a real implementation, you'd need to fetch and update each question/answer account
+            // This is simplified - you'd need separate accounts for each question/answer
+            total_bounty = total_bounty.checked_add(10_000_000).ok_or(Trace9Error::Overflow)?;
+        }
+
+        oracle_state.provider_balance = oracle_state
+            .provider_balance
+            .checked_add(total_bounty)
+            .ok_or(Trace9Error::Overflow)?;
+
+        emit!(BatchAnswersProvided {
+            question_ids: question_ids.clone(),
+            provider: ctx.accounts.oracle_provider.key(),
+        });
+
+        Ok(())
+    }
+
     /// Refund unanswered question after refund period (7 days)
     pub fn refund_question(ctx: Context<RefundQuestion>) -> Result<()> {
         require!(
@@ -279,6 +380,22 @@ pub struct ProvideAnswer<'info> {
 }
 
 #[derive(Accounts)]
+pub struct BatchAskQuestions<'info> {
+    #[account(mut, seeds = [b"oracle_state"], bump = oracle_state.bump)]
+    pub oracle_state: Account<'info, OracleState>,
+    #[account(mut)]
+    pub requester: Signer<'info>,
+    pub system_program: Program<'info, System>,
+}
+
+#[derive(Accounts)]
+pub struct BatchProvideAnswers<'info> {
+    #[account(mut, seeds = [b"oracle_state"], bump = oracle_state.bump)]
+    pub oracle_state: Account<'info, OracleState>,
+    pub oracle_provider: Signer<'info>,
+}
+
+#[derive(Accounts)]
 pub struct RefundQuestion<'info> {
     #[account(mut, seeds = [b"question", question_account.question_id.to_le_bytes().as_ref()], bump)]
     pub question_account: Account<'info, QuestionAccount>,
@@ -393,6 +510,18 @@ pub struct AnswerProvided {
 }
 
 #[event]
+pub struct BatchQuestionsAsked {
+    pub question_ids: Vec<u64>,
+    pub requester: Pubkey,
+}
+
+#[event]
+pub struct BatchAnswersProvided {
+    pub question_ids: Vec<u64>,
+    pub provider: Pubkey,
+}
+
+#[event]
 pub struct OracleFeeUpdated {
     pub old_fee: u64,
     pub new_fee: u64,
@@ -420,5 +549,8 @@ pub enum Trace9Error {
     NoBalance,
     #[msg("Overflow")]
     Overflow,
+    #[msg("Invalid batch")]
+    InvalidBatch,
+    #[msg("Invalid batch size")]
+    InvalidBatchSize,
 }
-

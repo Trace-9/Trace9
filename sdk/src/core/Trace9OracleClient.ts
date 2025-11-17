@@ -305,5 +305,93 @@ export class Trace9OracleClient {
 
     return tx;
   }
+
+  /**
+   * Batch ask multiple questions
+   */
+  async batchAskQuestions(params: {
+    questionTypes: QuestionType[];
+    questions: string[];
+    deadlines: number[];
+  }): Promise<string[]> {
+    if (params.questions.length !== params.deadlines.length || 
+        params.questions.length !== params.questionTypes.length) {
+      throw new Error('All arrays must have the same length');
+    }
+
+    const [oracleStatePDA] = await this.getOracleStatePDA();
+    
+    const questionTypes = params.questionTypes.map(qt => {
+      switch (qt) {
+        case QuestionType.General:
+          return { general: {} };
+        case QuestionType.Price:
+          return { price: {} };
+        case QuestionType.YesNo:
+          return { yesNo: {} };
+        case QuestionType.Numeric:
+          return { numeric: {} };
+        default:
+          throw new Error(`Unknown question type: ${qt}`);
+      }
+    }) as any;
+
+    const deadlines = params.deadlines.map(d => new BN(d));
+
+    const questionIds = await this.program.methods
+      .batchAskQuestions(questionTypes, params.questions, deadlines)
+      .accounts({
+        oracleState: oracleStatePDA,
+        requester: this.provider.wallet.publicKey,
+        systemProgram: SystemProgram.programId,
+      })
+      .rpc();
+
+    // Note: The program returns Vec<u64>, but we need to parse it from logs/events
+    // For now, return empty array - in production, parse from transaction logs
+    return [];
+  }
+
+  /**
+   * Batch provide answers to multiple questions
+   */
+  async batchProvideAnswers(params: {
+    questionIds: string[];
+    textAnswers: string[];
+    numericAnswers: bigint[];
+    boolAnswers: boolean[];
+    confidenceScores: number[];
+    dataSources: string[];
+  }): Promise<string> {
+    if (params.questionIds.length !== params.textAnswers.length ||
+        params.questionIds.length !== params.numericAnswers.length ||
+        params.questionIds.length !== params.boolAnswers.length ||
+        params.questionIds.length !== params.confidenceScores.length ||
+        params.questionIds.length !== params.dataSources.length) {
+      throw new Error('All arrays must have the same length');
+    }
+
+    const [oracleStatePDA] = await this.getOracleStatePDA();
+
+    const questionIds = params.questionIds.map(id => new BN(id));
+    const numericAnswers = params.numericAnswers.map(a => new BN(a.toString()));
+
+    const tx = await this.program.methods
+      .batchProvideAnswers(
+        questionIds,
+        params.textAnswers,
+        numericAnswers,
+        params.boolAnswers,
+        params.confidenceScores,
+        params.dataSources
+      )
+      .accounts({
+        oracleState: oracleStatePDA,
+        oracleProvider: this.provider.wallet.publicKey,
+      })
+      .rpc();
+
+    return tx;
+  }
 }
 

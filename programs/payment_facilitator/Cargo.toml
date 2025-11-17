@@ -1,0 +1,21 @@
+[package]
+name = "payment_facilitator"
+version = "1.0.0"
+description = "Trace9 Payment Facilitator - Batch SOL payments with platform fees"
+edition = "2021"
+
+[lib]
+crate-type = ["cdylib", "lib"]
+name = "payment_facilitator"
+
+[features]
+no-entrypoint = []
+no-idl = []
+no-log-ix-name = []
+cpi = ["no-entrypoint"]
+default = []
+
+[dependencies]
+anchor-lang = "0.30.0"
+anchor-spl = "0.30.0"
+
