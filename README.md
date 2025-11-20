@@ -19,6 +19,7 @@ Trace9 Oracle is a **fully permissionless oracle SDK** built on Solana that enab
 ### Key Features
 
 - **Permissionless Oracle** - Ask questions and get answers on-chain  
+- **Prediction Markets** - Five market types: binary, multi-outcome, range, time-series, and conditional markets  
 - **Native SOL Payments** - All payments use native SOL (no token contracts)  
 - **Batch Operations** - Process multiple questions/answers in single transactions  
 - **Payment Facilitator** - Batch SOL payments with platform fees  
@@ -79,18 +80,34 @@ trace9/
 │   ├── trace9/
 │   │   └── src/
 │   │       └── lib.rs              # Main Anchor program (oracle + batch ops)
-│   └── payment_facilitator/
+│   ├── payment_facilitator/
+│   │   └── src/
+│   │       └── lib.rs              # Payment facilitator program
+│   ├── simple_prediction_market/
+│   │   └── src/
+│   │       └── lib.rs              # Binary yes/no prediction markets
+│   ├── multi_outcome_market/
+│   │   └── src/
+│   │       └── lib.rs              # Multi-outcome markets (2-10 outcomes)
+│   ├── range_market/
+│   │   └── src/
+│   │       └── lib.rs              # Range-based markets
+│   ├── time_series_market/
+│   │   └── src/
+│   │       └── lib.rs              # Multi-period time series markets
+│   └── conditional_market/
 │       └── src/
-│           └── lib.rs              # Payment facilitator program
+│           └── lib.rs              # Conditional markets (dependent on other markets)
 │
 ├── sdk/
 │   └── src/
 │       ├── core/
 │       │   ├── Trace9OracleClient.ts
 │       │   ├── PaymentFacilitatorClient.ts
-│       │   └── MultiWalletPool.ts
+│       │   ├── MultiWalletPool.ts
+│       │   └── SimplePredictionMarketClient.ts
 │       ├── types/
-│       │   └── index.ts
+│       │   └── index.ts            # All types including prediction markets
 │       └── utils/
 │           └── constants.ts
 │
@@ -101,7 +118,7 @@ trace9/
 │   └── src/
 │       └── config.ts              # Frontend configuration
 │
-├── Anchor.toml                    # Anchor configuration
+├── Anchor.toml                    # Anchor configuration (all programs)
 ├── package.json
 └── README.md
 ```
@@ -125,11 +142,19 @@ trace9/
    - Payment replay prevention
    - Fee withdrawal and management
 
-3. **TypeScript SDK** (`sdk/`)
+3. **Prediction Market Programs**
+   - **SimplePredictionMarket** - Binary yes/no markets with oracle resolution
+   - **MultiOutcomeMarket** - Markets with 2-10 outcomes (e.g., election results)
+   - **RangeMarket** - Bet on whether a value falls within a specific range
+   - **TimeSeriesMarket** - Multi-period markets (e.g., "Will BTC increase each month?")
+   - **ConditionalMarket** - Markets dependent on other markets' outcomes
+
+4. **TypeScript SDK** (`sdk/`)
    - `Trace9OracleClient` - Main client for oracle operations
    - `PaymentFacilitatorClient` - Payment facilitator client
+   - `SimplePredictionMarketClient` - Binary prediction market client
    - `MultiWalletPool` - Multi-wallet pool for parallel transactions
-   - Type definitions for questions, answers, and state
+   - Type definitions for questions, answers, markets, and state
    - Utility functions and constants
 
 ---
@@ -179,7 +204,7 @@ console.log(`Question asked! Transaction: ${tx}`);
 // Oracle provider only
 const tx = await client.provideAnswer({
   questionId: "0",
-  textAnswer: "BTC is trading at $45,000",
+  textAnswer: "BTC is trading at $95,000",
   numericAnswer: 45000n,
   boolAnswer: false,
   confidenceScore: 95,
@@ -277,6 +302,87 @@ const results = await pool.executeParallelTransactions(transactions);
 console.log(`Executed ${results.length} transactions in parallel`);
 ```
 
+### Prediction Markets
+
+#### Create a Binary Prediction Market
+
+```typescript
+import { SimplePredictionMarketClient } from '@trace9/sdk';
+import { PublicKey } from '@solana/web3.js';
+import { Wallet } from '@coral-xyz/anchor';
+
+const marketClient = new SimplePredictionMarketClient({
+  programId: SIMPLE_PREDICTION_MARKET_PROGRAM_ID,
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  network: 'mainnet-beta',
+}, wallet);
+
+// Initialize the market program (first time only)
+const oracleProgramId = new PublicKey('TRACE9_ORACLE_PROGRAM_ID');
+await marketClient.initialize(oracleProgramId, 200); // 2% fee
+
+// Create a new market
+const marketId = await marketClient.createMarket({
+  question: "Will Bitcoin reach $130,000 by end of 2025?",
+  resolutionTime: Math.floor(Date.now() / 1000) + 2592000, // 30 days
+});
+
+console.log(`Market created with ID: ${marketId}`);
+```
+
+#### Take a Position
+
+```typescript
+// Bet YES on the market
+const tx = await marketClient.takePosition(
+  marketId,
+  true, // true = YES, false = NO
+  100_000_000n // 0.1 SOL in lamports
+);
+
+console.log(`Position taken! Transaction: ${tx}`);
+```
+
+#### Resolve Market
+
+```typescript
+// After resolution time, resolve using oracle answer
+const oracleAnswerPDA = new PublicKey('ORACLE_ANSWER_PDA');
+await marketClient.resolveMarket(marketId, oracleAnswerPDA);
+```
+
+#### Claim Winnings
+
+```typescript
+// Claim winnings after market is resolved
+const winnings = await marketClient.calculateWinnings(marketId, userPublicKey);
+if (winnings > 0n) {
+  const tx = await marketClient.claimWinnings(marketId);
+  console.log(`Winnings claimed! Transaction: ${tx}`);
+}
+```
+
+#### Get Market Information
+
+```typescript
+// Get market details
+const market = await marketClient.getMarket(marketId);
+if (market) {
+  console.log(`Question: ${market.question}`);
+  console.log(`Yes Pool: ${market.yesPool} lamports`);
+  console.log(`No Pool: ${market.noPool} lamports`);
+  console.log(`Status: ${market.status}`);
+}
+
+// Get user position
+const position = await marketClient.getPosition(marketId, userPublicKey);
+if (position) {
+  console.log(`Yes Amount: ${position.yesAmount}`);
+  console.log(`No Amount: ${position.noAmount}`);
+  console.log(`Claimed: ${position.claimed}`);
+}
+```
+
 ---
 
 ## Testing
@@ -316,6 +422,51 @@ anchor test --provider.cluster devnet
 - `withdraw_fees` - Withdraw accumulated platform fees (authority only)
 - `update_platform_fee` - Update platform fee percentage (authority only)
 
+### Simple Prediction Market Program
+
+- `initialize` - Initialize prediction market program (authority only)
+- `create_market` - Create a new binary prediction market
+- `take_position` - Take a YES or NO position on a market
+- `resolve_market` - Resolve market using oracle answer
+- `claim_winnings` - Claim winnings from resolved market
+- `cancel_market` - Cancel market if oracle hasn't answered (after 7 days)
+- `claim_refund` - Claim refund from canceled market
+- `withdraw_fees` - Withdraw accumulated platform fees (authority only)
+
+### Multi-Outcome Market Program
+
+- `initialize` - Initialize multi-outcome market program
+- `create_market` - Create market with 2-10 outcomes
+- `take_position` - Bet on a specific outcome
+- `resolve_market` - Resolve using oracle numeric answer (outcome index)
+- `claim_winnings` - Claim winnings for winning outcome
+
+### Range Market Program
+
+- `initialize` - Initialize range market program
+- `create_market` - Create market with lower/upper bounds
+- `take_position` - Bet on in-range or out-of-range
+- `resolve_market` - Resolve using oracle numeric answer (check if in range)
+- `claim_winnings` - Claim winnings based on range outcome
+
+### Time Series Market Program
+
+- `initialize` - Initialize time series market program
+- `create_market` - Create market with multiple time periods (2-12)
+- `take_position` - Bet on all periods succeeding or any failing
+- `resolve_period` - Resolve individual period using oracle
+- `claim_winnings` - Claim winnings after all periods resolved
+
+### Conditional Market Program
+
+- `initialize` - Initialize conditional market program
+- `create_market` - Create market dependent on parent market
+- `take_position` - Take position in conditional market
+- `check_parent_market` - Check if parent condition is met
+- `resolve_market` - Resolve conditional market (if condition met)
+- `claim_winnings` - Claim winnings from resolved market
+- `get_refund` - Get refund if condition not met
+
 ---
 
 ## Network Information
@@ -346,6 +497,9 @@ anchor test --provider.cluster devnet
 - **Batch Processing** - Gas-efficient batch operations for multiple questions/payments
 - **Payment Replay Prevention** - Unique payment IDs prevent double-spending
 - **Platform Fees** - Configurable fee system for payment facilitator
+- **Prediction Markets** - Five market types with oracle integration for resolution
+- **Market Types** - Binary, multi-outcome, range, time-series, and conditional markets
+- **Parimutuel Pools** - Automatic payout distribution based on pool sizes
 
 ---
 
@@ -391,6 +545,7 @@ Use it, fork it, modify it - whatever you want! All programs are fully permissio
 |---------|--------|-----------|------|
 | **Permissionless** | Yes - Anyone can ask | No - Whitelisted nodes | Limited |
 | **Native Payments** | SOL | LINK tokens | Pyth tokens |
+| **Prediction Markets** | 5 market types | Limited | Limited |
 | **Batch Operations** | Yes - Built-in | Limited | Limited |
 | **Parallel Execution** | Multi-wallet pool | Sequential | Sequential |
 | **Solana Native** | Built for Solana | EVM only | Solana |
@@ -408,9 +563,9 @@ Use it, fork it, modify it - whatever you want! All programs are fully permissio
 
 <div align="center">
 
-**Trace9 Oracle v1.0** - Permissionless oracle on Solana
+**Trace9 Oracle v1.0** - Permissionless oracle & prediction markets on Solana
 
-Permissionless | Native SOL | Solana Mainnet | Open Source
+Permissionless | Native SOL | Prediction Markets | Solana Mainnet | Open Source
 
 Built by the community, for the community
 

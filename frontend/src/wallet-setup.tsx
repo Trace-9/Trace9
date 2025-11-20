@@ -1,7 +1,7 @@
 /**
  * Example: Solana Wallet Adapter Setup for Trace9 Frontend
  * 
- * This file demonstrates how to replace ethers wallet connections
+ * This file demonstrates how to setup wallet connections
  * with @solana/wallet-adapter-react for Trace9 Oracle frontend integration.
  * 
  * Install required packages:
@@ -31,9 +31,9 @@ export const WalletContextProvider: FC<WalletContextProviderProps> = ({ children
   // Use mainnet-beta or devnet
   const network = DEFAULT_NETWORK.name as WalletAdapterNetwork;
   
-  // You can also provide a custom RPC endpoint
+  // Use the RPC endpoint from DEFAULT_NETWORK config, fallback to clusterApiUrl
   const endpoint = useMemo(() => {
-    return TRACE9_CONFIG.rpcUrl || clusterApiUrl(network);
+    return DEFAULT_NETWORK.rpcUrl || clusterApiUrl(network);
   }, [network]);
 
   // Initialize wallet adapters

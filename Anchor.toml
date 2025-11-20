@@ -8,10 +8,20 @@ skip-lint = false
 [programs.mainnet]
 trace9 = "trc9oRacL3mP9vK8JqF2nH5xY7wD4bC6eA8g"
 payment_facilitator = "payFaciL3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+simple_prediction_market = "simpPredM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+multi_outcome_market = "multOutcM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+range_market = "rangeMarkM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+time_series_market = "timeSeriM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+conditional_market = "condMarkM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
 
 [programs.devnet]
 trace9 = "trc9oRacL3mP9vK8JqF2nH5xY7wD4bC6eA8g"
 payment_facilitator = "payFaciL3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+simple_prediction_market = "simpPredM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+multi_outcome_market = "multOutcM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+range_market = "rangeMarkM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+time_series_market = "timeSeriM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
+conditional_market = "condMarkM3mP9vK8JqF2nH5xY7wD4bC6eA8g"
 
 [registry]
 url = "https://api.apr.dev"
