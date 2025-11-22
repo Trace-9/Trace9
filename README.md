@@ -7,6 +7,8 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Solana](https://img.shields.io/badge/Chain-Solana_Mainnet-purple.svg)](https://solana.com/)
 [![Anchor](https://img.shields.io/badge/Framework-Anchor-blue.svg)](https://www.anchor-lang.com/)
+[![npm version](https://img.shields.io/npm/v/@trace9/sdk.svg)](https://www.npmjs.com/package/@trace9/sdk)
+[![npm downloads](https://img.shields.io/npm/dm/@trace9/sdk.svg)](https://www.npmjs.com/package/@trace9/sdk)
 
 </div>
 
@@ -41,10 +43,25 @@ Trace9 Oracle is a **fully permissionless oracle SDK** built on Solana that enab
 
 ### Installation
 
+#### Install SDK from npm (Recommended)
+
+```bash
+npm install @trace9/sdk
+```
+
+Or with yarn:
+```bash
+yarn add @trace9/sdk
+```
+
+**📦 Package**: [@trace9/sdk on npm](https://www.npmjs.com/package/@trace9/sdk)
+
+#### Install from Source
+
 ```bash
 # Clone the repository
-git clone <repository-url>
-cd trace9
+git clone https://github.com/Trace-9/Trace9.git
+cd Trace9
 
 # Install dependencies
 npm install
@@ -168,6 +185,12 @@ trace9/
 ---
 
 ## Usage Examples
+
+### Install the SDK
+
+```bash
+npm install @trace9/sdk
+```
 
 ### Initialize the Oracle
 
@@ -663,7 +686,9 @@ anchor test --provider.cluster devnet
 
 ### SDK Documentation
 
-See `sdk/README.md` for detailed SDK usage and API documentation.
+- **npm Package**: [@trace9/sdk](https://www.npmjs.com/package/@trace9/sdk)
+- **SDK README**: See `sdk/README.md` for detailed SDK usage and API documentation
+- **Installation**: `npm install @trace9/sdk`
 
 ---
 
