@@ -55,9 +55,118 @@ Main client class for interacting with the Trace9 Oracle program.
 - `setOracleFee(newFee: bigint)` - Update oracle fee (authority only)
 - `setOracleProvider(newProvider: PublicKey)` - Update oracle provider (authority only)
 
+### Simple Prediction Market Client
+
+Binary yes/no prediction market client.
+
+#### Methods
+
+- `initialize(oracleProgram: PublicKey, feePercentage?: number)` - Initialize the market program
+- `createMarket(params: CreateSimpleMarketParams)` - Create a new binary market
+- `takePosition(marketId: bigint, isYes: boolean, amount: bigint)` - Take YES or NO position
+- `resolveMarket(marketId: bigint, oracleAnswerPDA: PublicKey)` - Resolve market using oracle answer
+- `claimWinnings(marketId: bigint)` - Claim winnings from resolved market
+- `getMarket(marketId: bigint)` - Get market details
+- `getPosition(marketId: bigint, user: PublicKey)` - Get user position
+- `calculateWinnings(marketId: bigint, user: PublicKey)` - Calculate potential winnings
+- `getMarketPublicKey(marketId: bigint)` - Get market PDA (for conditional markets)
+
+### Multi-Outcome Market Client
+
+Prediction market client for markets with 2-10 outcomes (e.g., elections, tournaments).
+
+#### Methods
+
+- `initialize(oracleProgram: PublicKey, feePercentage?: number)` - Initialize the market program
+- `createMarket(params: CreateMultiOutcomeMarketParams)` - Create market with multiple outcomes
+- `takePosition(marketId: bigint, outcomeIndex: number, amount: bigint)` - Bet on specific outcome
+- `resolveMarket(marketId: bigint, oracleAnswerPDA: PublicKey)` - Resolve using numeric answer (outcome index)
+- `claimWinnings(marketId: bigint)` - Claim winnings for winning outcome
+- `getMarket(marketId: bigint)` - Get market details
+- `getPosition(marketId: bigint, user: PublicKey)` - Get user position
+- `calculateWinnings(marketId: bigint, user: PublicKey)` - Calculate parimutuel winnings
+
+### Range Market Client
+
+Range-based prediction market client for betting on numeric value ranges.
+
+#### Methods
+
+- `initialize(oracleProgram: PublicKey, feePercentage?: number)` - Initialize the market program
+- `createMarket(params: CreateRangeMarketParams)` - Create market with lower/upper bounds
+- `takePosition(marketId: bigint, inRange: boolean, amount: bigint)` - Bet IN-RANGE or OUT-RANGE
+- `resolveMarket(marketId: bigint, oracleAnswerPDA: PublicKey)` - Resolve using numeric oracle value
+- `claimWinnings(marketId: bigint)` - Claim winnings based on range outcome
+- `getMarket(marketId: bigint)` - Get market details
+- `getPosition(marketId: bigint, user: PublicKey)` - Get user position
+- `calculateWinnings(marketId: bigint, user: PublicKey)` - Calculate winnings
+
+### Time-Series Market Client
+
+Multi-period time-series prediction market client.
+
+#### Methods
+
+- `initialize(oracleProgram: PublicKey, feePercentage?: number)` - Initialize the market program
+- `createMarket(params: CreateTimeSeriesMarketParams)` - Create market with multiple deadlines
+- `takePosition(marketId: bigint, allSucceed: boolean, amount: bigint)` - Bet ALL-SUCCEED or ANY-FAIL
+- `resolvePeriod(marketId: bigint, periodIndex: number, oracleAnswerPDA: PublicKey)` - Resolve individual period
+- `claimWinnings(marketId: bigint)` - Claim winnings after all periods resolved
+- `getMarket(marketId: bigint)` - Get market details with period status
+- `getPosition(marketId: bigint, user: PublicKey)` - Get user position
+- `calculateWinnings(marketId: bigint, user: PublicKey)` - Calculate winnings
+
+### Conditional Market Client
+
+Conditional prediction market client for markets dependent on parent markets.
+
+#### Methods
+
+- `initialize(oracleProgram: PublicKey, feePercentage?: number)` - Initialize the market program
+- `createMarket(params: CreateConditionalMarketParams)` - Create market dependent on parent market
+- `takePosition(marketId: bigint, isYes: boolean, amount: bigint)` - Take YES/NO position
+- `checkParentMarket(marketId: bigint)` - Check if parent condition is met
+- `resolveMarket(marketId: bigint, oracleAnswerPDA: PublicKey)` - Resolve conditional market
+- `claimWinnings(marketId: bigint)` - Claim winnings from resolved market
+- `getRefund(marketId: bigint)` - Get refund if parent condition not met
+- `getMarket(marketId: bigint)` - Get market details
+- `getPosition(marketId: bigint, user: PublicKey)` - Get user position
+- `calculateWinnings(marketId: bigint, user: PublicKey)` - Calculate winnings
+
+### Payment Facilitator Client
+
+Client for batch SOL payment settlement with platform fees.
+
+#### Methods
+
+- `initialize(feeBasisPoints: number)` - Initialize payment facilitator
+- `settlePayment(params: SettlePaymentParams)` - Settle a single payment
+- `batchSettlePayments(params: BatchSettlePaymentsParams)` - Settle multiple payments
+- `withdrawFees()` - Withdraw accumulated platform fees (authority only)
+- `updatePlatformFee(newFeeBasisPoints: number)` - Update platform fee (authority only)
+
+### Multi-Wallet Pool
+
+Utility for parallel transaction execution across multiple worker wallets.
+
+#### Methods
+
+- `initialize()` - Initialize the wallet pool
+- `executeParallelTransactions(transactions: Transaction[])` - Execute transactions in parallel
+- `getWallet(index: number)` - Get wallet at index
+- `fundWallet(index: number, amount: bigint)` - Fund a specific wallet
+
 ## Types
 
-See `src/types/index.ts` for all TypeScript type definitions.
+See `src/types/index.ts` for all TypeScript type definitions including:
+- `QuestionType`, `AnswerStatus`, `MarketStatus`, `Outcome`
+- `Question`, `Answer`, `QuestionWithAnswer`
+- `SimpleMarket`, `SimplePosition`
+- `MultiOutcomeMarket`, `MultiOutcomePosition`
+- `RangeMarket`, `RangePosition`
+- `TimeSeriesMarket`, `TimeSeriesPosition`, `TimePeriod`
+- `ConditionalMarket`, `ConditionalPosition`, `ConditionalMarketStatus`
+- All create market parameter types
 
 ## Constants
 

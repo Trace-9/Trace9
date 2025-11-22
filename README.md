@@ -105,7 +105,11 @@ trace9/
 │       │   ├── Trace9OracleClient.ts
 │       │   ├── PaymentFacilitatorClient.ts
 │       │   ├── MultiWalletPool.ts
-│       │   └── SimplePredictionMarketClient.ts
+│       │   ├── SimplePredictionMarketClient.ts
+│       │   ├── MultiOutcomeMarketClient.ts
+│       │   ├── RangeMarketClient.ts
+│       │   ├── TimeSeriesMarketClient.ts
+│       │   └── ConditionalMarketClient.ts
 │       ├── types/
 │       │   └── index.ts            # All types including prediction markets
 │       └── utils/
@@ -153,6 +157,10 @@ trace9/
    - `Trace9OracleClient` - Main client for oracle operations
    - `PaymentFacilitatorClient` - Payment facilitator client
    - `SimplePredictionMarketClient` - Binary prediction market client
+   - `MultiOutcomeMarketClient` - Multi-outcome prediction market client (2-10 outcomes)
+   - `RangeMarketClient` - Range-based prediction market client
+   - `TimeSeriesMarketClient` - Time-series prediction market client
+   - `ConditionalMarketClient` - Conditional prediction market client
    - `MultiWalletPool` - Multi-wallet pool for parallel transactions
    - Type definitions for questions, answers, markets, and state
    - Utility functions and constants
@@ -380,6 +388,147 @@ if (position) {
   console.log(`Yes Amount: ${position.yesAmount}`);
   console.log(`No Amount: ${position.noAmount}`);
   console.log(`Claimed: ${position.claimed}`);
+}
+```
+
+#### Multi-Outcome Market
+
+```typescript
+import { MultiOutcomeMarketClient } from '@trace9/sdk';
+
+const multiClient = new MultiOutcomeMarketClient({
+  programId: MULTI_OUTCOME_MARKET_PROGRAM_ID,
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  network: 'mainnet-beta',
+}, wallet);
+
+// Initialize (first time only)
+await multiClient.initialize(ORACLE_PROGRAM_ID, 200);
+
+// Create market with multiple outcomes
+const marketId = await multiClient.createMarket({
+  question: "Who will win the 2024 US Presidential Election?",
+  outcomeLabels: ["Candidate A", "Candidate B", "Candidate C", "Independent"],
+  resolutionTime: Math.floor(Date.now() / 1000) + 2592000,
+});
+
+// Bet on outcome 0 (Candidate A)
+await multiClient.takePosition(marketId, 0, 500_000_000n); // 0.5 SOL
+
+// Resolve using oracle numeric answer (outcome index)
+await multiClient.resolveMarket(marketId, oracleAnswerPDA);
+```
+
+#### Range Market
+
+```typescript
+import { RangeMarketClient } from '@trace9/sdk';
+
+const rangeClient = new RangeMarketClient({
+  programId: RANGE_MARKET_PROGRAM_ID,
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  network: 'mainnet-beta',
+}, wallet);
+
+// Initialize (first time only)
+await rangeClient.initialize(ORACLE_PROGRAM_ID, 200);
+
+// Create range market
+const marketId = await rangeClient.createMarket({
+  question: "Will Bitcoin price be between $90,000 and $100,000?",
+  lowerBound: 90_000n * 1_000_000_000n,
+  upperBound: 100_000n * 1_000_000_000n,
+  deadline: Math.floor(Date.now() / 1000) + 2592000,
+});
+
+// Bet IN-RANGE
+await rangeClient.takePosition(marketId, true, 500_000_000n);
+
+// Resolve using oracle numeric answer
+await rangeClient.resolveMarket(marketId, oracleAnswerPDA);
+```
+
+#### Time-Series Market
+
+```typescript
+import { TimeSeriesMarketClient } from '@trace9/sdk';
+
+const timeSeriesClient = new TimeSeriesMarketClient({
+  programId: TIME_SERIES_MARKET_PROGRAM_ID,
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  network: 'mainnet-beta',
+}, wallet);
+
+// Initialize (first time only)
+await timeSeriesClient.initialize(ORACLE_PROGRAM_ID, 200);
+
+// Create time-series market with multiple periods
+const now = Math.floor(Date.now() / 1000);
+const marketId = await timeSeriesClient.createMarket({
+  question: "Will Bitcoin increase each month for 3 months?",
+  deadlines: [
+    now + 2592000,  // Month 1
+    now + 5184000,  // Month 2
+    now + 7776000,  // Month 3
+  ],
+});
+
+// Bet that ALL periods will succeed
+await timeSeriesClient.takePosition(marketId, true, 1_000_000_000n);
+
+// Resolve each period sequentially as deadlines are reached
+await timeSeriesClient.resolvePeriod(marketId, 0, oracleAnswerPDA1);
+await timeSeriesClient.resolvePeriod(marketId, 1, oracleAnswerPDA2);
+await timeSeriesClient.resolvePeriod(marketId, 2, oracleAnswerPDA3);
+```
+
+#### Conditional Market
+
+```typescript
+import { ConditionalMarketClient, SimplePredictionMarketClient } from '@trace9/sdk';
+
+const conditionalClient = new ConditionalMarketClient({
+  programId: CONDITIONAL_MARKET_PROGRAM_ID,
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  network: 'mainnet-beta',
+}, wallet);
+
+// Initialize (first time only)
+await conditionalClient.initialize(ORACLE_PROGRAM_ID, 200);
+
+// First create a parent market
+const simpleClient = new SimplePredictionMarketClient({
+  programId: SIMPLE_MARKET_PROGRAM_ID,
+  rpcUrl: 'https://api.mainnet-beta.solana.com',
+  network: 'mainnet-beta',
+}, wallet);
+
+const parentMarketId = await simpleClient.createMarket({
+  question: "Will Bitcoin reach $100,000?",
+  resolutionTime: Math.floor(Date.now() / 1000) + 2592000,
+});
+
+const parentMarketPDA = await simpleClient.getMarketPublicKey(parentMarketId);
+
+// Create conditional market dependent on parent
+const conditionalMarketId = await conditionalClient.createMarket({
+  question: "If BTC reaches $100k, will it stay above $100k for 30 days?",
+  parentMarket: parentMarketPDA,
+  requiredParentOutcome: 1, // 1 = YES, 0 = NO
+});
+
+// Bet on conditional market (only valid if parent resolves YES)
+await conditionalClient.takePosition(conditionalMarketId, true, 500_000_000n);
+
+// Check if parent condition is met
+const parentMet = await conditionalClient.checkParentMarket(conditionalMarketId);
+
+if (parentMet) {
+  // Resolve conditional market
+  await conditionalClient.resolveMarket(conditionalMarketId, oracleAnswerPDA);
+} else {
+  // Get refund if condition not met
+  await conditionalClient.getRefund(conditionalMarketId);
 }
 ```
 

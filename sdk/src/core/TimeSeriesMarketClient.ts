@@ -1,35 +1,31 @@
 import {
   Connection,
   PublicKey,
-  Transaction,
   SystemProgram,
-  sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import { Program, AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
 import {
-  SimpleMarket,
-  SimplePosition,
-  CreateSimpleMarketParams,
-  MarketStatus,
-  Outcome,
+  TimeSeriesMarket,
+  TimeSeriesPosition,
+  CreateTimeSeriesMarketParams,
+  TimePeriod,
 } from '../types';
-import * as anchor from '@coral-xyz/anchor';
 
-const SIMPLE_PREDICTION_MARKET_PROGRAM_ID = new PublicKey('simpPredM3mP9vK8JqF2nH5xY7wD4bC6eA8g');
+const TIME_SERIES_MARKET_PROGRAM_ID = new PublicKey('timeSerM3mP9vK8JqF2nH5xY7wD4bC6eA8g');
 const MARKET_STATE_SEED = 'market_state';
 const MARKET_SEED = 'market';
 const POSITION_SEED = 'position';
 
-type SimplePredictionMarket = any;
+type TimeSeriesMarketProgram = any;
 
-export class SimplePredictionMarketClient {
+export class TimeSeriesMarketClient {
   private connection: Connection;
-  private program: Program<SimplePredictionMarket>;
+  private program: Program<TimeSeriesMarketProgram>;
   private provider: AnchorProvider;
   public readonly programId: PublicKey;
 
   constructor(config: { programId?: PublicKey; rpcUrl: string; network: string }, wallet: Wallet) {
-    this.programId = config.programId || SIMPLE_PREDICTION_MARKET_PROGRAM_ID;
+    this.programId = config.programId || TIME_SERIES_MARKET_PROGRAM_ID;
     
     this.connection = new Connection(config.rpcUrl, 'confirmed');
     this.provider = new AnchorProvider(
@@ -74,7 +70,7 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Initialize the prediction market program
+   * Initialize the time-series market program
    */
   async initialize(oracleProgram: PublicKey, feePercentage: number = 200): Promise<string> {
     const [marketStatePDA] = await this.getMarketStatePDA();
@@ -92,9 +88,9 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Create a new binary prediction market
+   * Create a new time-series prediction market
    */
-  async createMarket(params: CreateSimpleMarketParams): Promise<bigint> {
+  async createMarket(params: CreateTimeSeriesMarketParams): Promise<bigint> {
     const [marketStatePDA] = await this.getMarketStatePDA();
     
     // Get current market counter to determine market ID
@@ -104,7 +100,10 @@ export class SimplePredictionMarketClient {
     const [marketPDA] = await this.getMarketPDA(marketId);
     
     const tx = await this.program.methods
-      .createMarket(params.question, new BN(params.resolutionTime))
+      .createMarket(
+        params.question,
+        params.deadlines.map(d => new BN(d))
+      )
       .accounts({
         marketAccount: marketPDA,
         marketState: marketStatePDA,
@@ -117,15 +116,15 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Take a position on a market (YES or NO)
+   * Take a position on a market (ALL-SUCCEED or ANY-FAIL)
    */
-  async takePosition(marketId: bigint, isYes: boolean, amount: bigint): Promise<string> {
+  async takePosition(marketId: bigint, allSucceed: boolean, amount: bigint): Promise<string> {
     const [marketPDA] = await this.getMarketPDA(marketId);
     const [positionPDA] = await this.getPositionPDA(marketId, this.provider.wallet.publicKey);
     const [marketStatePDA] = await this.getMarketStatePDA();
     
     const tx = await this.program.methods
-      .takePosition(new BN(marketId.toString()), isYes)
+      .takePosition(new BN(marketId.toString()), allSucceed)
       .accounts({
         marketAccount: marketPDA,
         position: positionPDA,
@@ -139,14 +138,14 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Resolve market using oracle answer
+   * Resolve a specific period using oracle answer
    */
-  async resolveMarket(marketId: bigint, oracleAnswerPDA: PublicKey): Promise<string> {
+  async resolvePeriod(marketId: bigint, periodIndex: number, oracleAnswerPDA: PublicKey): Promise<string> {
     const [marketPDA] = await this.getMarketPDA(marketId);
     const [marketStatePDA] = await this.getMarketStatePDA();
     
     const tx = await this.program.methods
-      .resolveMarket(new BN(marketId.toString()))
+      .resolvePeriod(new BN(marketId.toString()), periodIndex)
       .accounts({
         marketAccount: marketPDA,
         marketState: marketStatePDA,
@@ -179,7 +178,7 @@ export class SimplePredictionMarketClient {
   /**
    * Get market details
    */
-  async getMarket(marketId: bigint): Promise<SimpleMarket | null> {
+  async getMarket(marketId: bigint): Promise<TimeSeriesMarket | null> {
     try {
       const [marketPDA] = await this.getMarketPDA(marketId);
       const market = await this.program.account.marketAccount.fetch(marketPDA);
@@ -187,14 +186,18 @@ export class SimplePredictionMarketClient {
       return {
         marketId: BigInt(market.marketId.toString()),
         question: market.question,
-        resolutionTime: market.resolutionTime.toNumber(),
-        yesPool: BigInt(market.yesPool.toString()),
-        noPool: BigInt(market.noPool.toString()),
-        status: market.status as MarketStatus,
-        outcome: market.outcome as Outcome,
+        periods: market.periods.map((p: any) => ({
+          deadline: p.deadline.toNumber(),
+          questionId: BigInt(p.questionId.toString()),
+          result: BigInt(p.result.toString()),
+          resolved: p.resolved || false,
+        })),
+        successPool: BigInt(market.successPool.toString()),
+        failurePool: BigInt(market.failurePool.toString()),
         totalFees: BigInt(market.totalFees.toString()),
         createdAt: market.createdAt.toNumber(),
-        creator: market.creator,
+        allResolved: market.allResolved || false,
+        allSuccess: market.allSuccess || false,
       };
     } catch (error) {
       return null;
@@ -204,14 +207,14 @@ export class SimplePredictionMarketClient {
   /**
    * Get user position
    */
-  async getPosition(marketId: bigint, user: PublicKey): Promise<SimplePosition | null> {
+  async getPosition(marketId: bigint, user: PublicKey): Promise<TimeSeriesPosition | null> {
     try {
       const [positionPDA] = await this.getPositionPDA(marketId, user);
       const position = await this.program.account.position.fetch(positionPDA);
       
       return {
-        yesAmount: BigInt(position.yesAmount.toString()),
-        noAmount: BigInt(position.noAmount.toString()),
+        successAmount: BigInt(position.successAmount.toString()),
+        failureAmount: BigInt(position.failureAmount.toString()),
         claimed: position.claimed,
       };
     } catch (error) {
@@ -226,31 +229,23 @@ export class SimplePredictionMarketClient {
     const market = await this.getMarket(marketId);
     const position = await this.getPosition(marketId, user);
     
-    if (!market || !position || market.status !== MarketStatus.Resolved || position.claimed) {
+    if (!market || !position || !market.allResolved || position.claimed) {
       return 0n;
     }
 
-    const totalPool = market.yesPool + market.noPool;
+    const totalPool = market.successPool + market.failurePool;
     if (totalPool === 0n) return 0n;
 
-    if (market.outcome === Outcome.Yes && position.yesAmount > 0n) {
-      if (market.yesPool === 0n) return 0n;
-      return (position.yesAmount * totalPool) / market.yesPool;
-    } else if (market.outcome === Outcome.No && position.noAmount > 0n) {
-      if (market.noPool === 0n) return 0n;
-      return (position.noAmount * totalPool) / market.noPool;
+    // User wins if they bet on the correct outcome
+    if (market.allSuccess && position.successAmount > 0n) {
+      if (market.successPool === 0n) return 0n;
+      return (position.successAmount * totalPool) / market.successPool;
+    } else if (!market.allSuccess && position.failureAmount > 0n) {
+      if (market.failurePool === 0n) return 0n;
+      return (position.failureAmount * totalPool) / market.failurePool;
     }
 
     return 0n;
-  }
-
-  /**
-   * Get market PDA (public key) for a given market ID
-   * Useful for conditional markets that reference parent markets
-   */
-  async getMarketPublicKey(marketId: bigint): Promise<PublicKey> {
-    const [marketPDA] = await this.getMarketPDA(marketId);
-    return marketPDA;
   }
 }
 

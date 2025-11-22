@@ -1,35 +1,30 @@
 import {
   Connection,
   PublicKey,
-  Transaction,
   SystemProgram,
-  sendAndConfirmTransaction,
 } from '@solana/web3.js';
 import { Program, AnchorProvider, Wallet, BN } from '@coral-xyz/anchor';
 import {
-  SimpleMarket,
-  SimplePosition,
-  CreateSimpleMarketParams,
-  MarketStatus,
-  Outcome,
+  RangeMarket,
+  RangePosition,
+  CreateRangeMarketParams,
 } from '../types';
-import * as anchor from '@coral-xyz/anchor';
 
-const SIMPLE_PREDICTION_MARKET_PROGRAM_ID = new PublicKey('simpPredM3mP9vK8JqF2nH5xY7wD4bC6eA8g');
+const RANGE_MARKET_PROGRAM_ID = new PublicKey('rangeMktM3mP9vK8JqF2nH5xY7wD4bC6eA8g');
 const MARKET_STATE_SEED = 'market_state';
 const MARKET_SEED = 'market';
 const POSITION_SEED = 'position';
 
-type SimplePredictionMarket = any;
+type RangeMarketProgram = any;
 
-export class SimplePredictionMarketClient {
+export class RangeMarketClient {
   private connection: Connection;
-  private program: Program<SimplePredictionMarket>;
+  private program: Program<RangeMarketProgram>;
   private provider: AnchorProvider;
   public readonly programId: PublicKey;
 
   constructor(config: { programId?: PublicKey; rpcUrl: string; network: string }, wallet: Wallet) {
-    this.programId = config.programId || SIMPLE_PREDICTION_MARKET_PROGRAM_ID;
+    this.programId = config.programId || RANGE_MARKET_PROGRAM_ID;
     
     this.connection = new Connection(config.rpcUrl, 'confirmed');
     this.provider = new AnchorProvider(
@@ -74,7 +69,7 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Initialize the prediction market program
+   * Initialize the range market program
    */
   async initialize(oracleProgram: PublicKey, feePercentage: number = 200): Promise<string> {
     const [marketStatePDA] = await this.getMarketStatePDA();
@@ -92,9 +87,9 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Create a new binary prediction market
+   * Create a new range prediction market
    */
-  async createMarket(params: CreateSimpleMarketParams): Promise<bigint> {
+  async createMarket(params: CreateRangeMarketParams): Promise<bigint> {
     const [marketStatePDA] = await this.getMarketStatePDA();
     
     // Get current market counter to determine market ID
@@ -104,7 +99,12 @@ export class SimplePredictionMarketClient {
     const [marketPDA] = await this.getMarketPDA(marketId);
     
     const tx = await this.program.methods
-      .createMarket(params.question, new BN(params.resolutionTime))
+      .createMarket(
+        params.question,
+        new BN(params.lowerBound.toString()),
+        new BN(params.upperBound.toString()),
+        new BN(params.deadline)
+      )
       .accounts({
         marketAccount: marketPDA,
         marketState: marketStatePDA,
@@ -117,15 +117,15 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Take a position on a market (YES or NO)
+   * Take a position on a market (IN-RANGE or OUT-RANGE)
    */
-  async takePosition(marketId: bigint, isYes: boolean, amount: bigint): Promise<string> {
+  async takePosition(marketId: bigint, inRange: boolean, amount: bigint): Promise<string> {
     const [marketPDA] = await this.getMarketPDA(marketId);
     const [positionPDA] = await this.getPositionPDA(marketId, this.provider.wallet.publicKey);
     const [marketStatePDA] = await this.getMarketStatePDA();
     
     const tx = await this.program.methods
-      .takePosition(new BN(marketId.toString()), isYes)
+      .takePosition(new BN(marketId.toString()), inRange)
       .accounts({
         marketAccount: marketPDA,
         position: positionPDA,
@@ -139,7 +139,7 @@ export class SimplePredictionMarketClient {
   }
 
   /**
-   * Resolve market using oracle answer
+   * Resolve market using oracle numeric answer
    */
   async resolveMarket(marketId: bigint, oracleAnswerPDA: PublicKey): Promise<string> {
     const [marketPDA] = await this.getMarketPDA(marketId);
@@ -179,7 +179,7 @@ export class SimplePredictionMarketClient {
   /**
    * Get market details
    */
-  async getMarket(marketId: bigint): Promise<SimpleMarket | null> {
+  async getMarket(marketId: bigint): Promise<RangeMarket | null> {
     try {
       const [marketPDA] = await this.getMarketPDA(marketId);
       const market = await this.program.account.marketAccount.fetch(marketPDA);
@@ -187,14 +187,16 @@ export class SimplePredictionMarketClient {
       return {
         marketId: BigInt(market.marketId.toString()),
         question: market.question,
-        resolutionTime: market.resolutionTime.toNumber(),
-        yesPool: BigInt(market.yesPool.toString()),
-        noPool: BigInt(market.noPool.toString()),
-        status: market.status as MarketStatus,
-        outcome: market.outcome as Outcome,
+        lowerBound: BigInt(market.lowerBound.toString()),
+        upperBound: BigInt(market.upperBound.toString()),
+        inRangePool: BigInt(market.inRangePool.toString()),
+        outRangePool: BigInt(market.outRangePool.toString()),
         totalFees: BigInt(market.totalFees.toString()),
         createdAt: market.createdAt.toNumber(),
-        creator: market.creator,
+        deadline: market.deadline.toNumber(),
+        resolvedAt: market.resolvedAt?.toNumber() || 0,
+        resolved: market.resolved || false,
+        inRange: market.inRange || false,
       };
     } catch (error) {
       return null;
@@ -204,14 +206,14 @@ export class SimplePredictionMarketClient {
   /**
    * Get user position
    */
-  async getPosition(marketId: bigint, user: PublicKey): Promise<SimplePosition | null> {
+  async getPosition(marketId: bigint, user: PublicKey): Promise<RangePosition | null> {
     try {
       const [positionPDA] = await this.getPositionPDA(marketId, user);
       const position = await this.program.account.position.fetch(positionPDA);
       
       return {
-        yesAmount: BigInt(position.yesAmount.toString()),
-        noAmount: BigInt(position.noAmount.toString()),
+        inRangeAmount: BigInt(position.inRangeAmount.toString()),
+        outRangeAmount: BigInt(position.outRangeAmount.toString()),
         claimed: position.claimed,
       };
     } catch (error) {
@@ -226,31 +228,22 @@ export class SimplePredictionMarketClient {
     const market = await this.getMarket(marketId);
     const position = await this.getPosition(marketId, user);
     
-    if (!market || !position || market.status !== MarketStatus.Resolved || position.claimed) {
+    if (!market || !position || !market.resolved || position.claimed) {
       return 0n;
     }
 
-    const totalPool = market.yesPool + market.noPool;
+    const totalPool = market.inRangePool + market.outRangePool;
     if (totalPool === 0n) return 0n;
 
-    if (market.outcome === Outcome.Yes && position.yesAmount > 0n) {
-      if (market.yesPool === 0n) return 0n;
-      return (position.yesAmount * totalPool) / market.yesPool;
-    } else if (market.outcome === Outcome.No && position.noAmount > 0n) {
-      if (market.noPool === 0n) return 0n;
-      return (position.noAmount * totalPool) / market.noPool;
+    if (market.inRange && position.inRangeAmount > 0n) {
+      if (market.inRangePool === 0n) return 0n;
+      return (position.inRangeAmount * totalPool) / market.inRangePool;
+    } else if (!market.inRange && position.outRangeAmount > 0n) {
+      if (market.outRangePool === 0n) return 0n;
+      return (position.outRangeAmount * totalPool) / market.outRangePool;
     }
 
     return 0n;
-  }
-
-  /**
-   * Get market PDA (public key) for a given market ID
-   * Useful for conditional markets that reference parent markets
-   */
-  async getMarketPublicKey(marketId: bigint): Promise<PublicKey> {
-    const [marketPDA] = await this.getMarketPDA(marketId);
-    return marketPDA;
   }
 }
 
