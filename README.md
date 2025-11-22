@@ -728,9 +728,26 @@ Use it, fork it, modify it - whatever you want! All programs are fully permissio
 
 ---
 
+## Packages
+
+### npm Package
+
+The Trace9 SDK is available on npm:
+
+```bash
+npm install @trace9/sdk
+```
+
+- **Package**: [@trace9/sdk](https://www.npmjs.com/package/@trace9/sdk)
+- **Version**: [![npm version](https://img.shields.io/npm/v/@trace9/sdk.svg)](https://www.npmjs.com/package/@trace9/sdk)
+- **Downloads**: [![npm downloads](https://img.shields.io/npm/dm/@trace9/sdk.svg)](https://www.npmjs.com/package/@trace9/sdk)
+
+---
+
 ## Support & Community
 
-- **GitHub Issues**: [Report bugs & request features](https://github.com/trace9/trace9/issues)
+- **GitHub Issues**: [Report bugs & request features](https://github.com/Trace-9/Trace9/issues)
+- **npm Package**: [@trace9/sdk](https://www.npmjs.com/package/@trace9/sdk)
 - **Documentation**: See `docs/` directory for detailed guides
 
 ---
